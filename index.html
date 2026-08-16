@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NusaScan — Nusachain Block Explorer & Qutrade Market</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- Leaflet CSS for Node Map -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: {
+          themeBg: 'var(--bg-color)',
+          cardBg: 'var(--card-bg)',
+          borderBg: 'var(--border-bg)',
+          textPrimary: 'var(--text-primary)',
+          textSecondary: 'var(--text-secondary)',
+          nusaGreen: '#10b981',
+          nusaCyan: '#06b6d4',
+          nusaBlue: '#3b82f6'
+        }
+      }
+    }
+  }
+</script>
+<style>
+  :root {
+    --bg-color: #f8fafc; 
+    --card-bg: #ffffff; 
+    --border-bg: #e2e8f0;
+    --text-primary: #0f172a; 
+    --text-secondary: #64748b;
+  }
+  .dark {
+    --bg-color: #030712; 
+    --card-bg: #0b0f19; 
+    --border-bg: #1f2937;
+    --text-primary: #f9fafb; 
+    --text-secondary: #9ca3af;
+  }
+  html, body {
+    margin: 0; padding: 0; width: 100%; min-height: 100%;
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-secondary);
+    transition: background-color .3s, color .3s;
+  }
+  
+  table { border-collapse: collapse; border-spacing: 0; border: none !important; }
+  td, th { border: none !important; outline: none !important; }
+  
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.3); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.6); }
+
+  .hidden-page { display: none !important; }
+  .fade-in { animation: fadeIn .35s ease; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(6px);} to {opacity:1; transform: translateY(0);} }
+
+  .glow-box {
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+  }
+  .glow-box:hover {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+    border-color: rgba(16, 185, 129, 0.35);
+  }
+  
+  .pulse-dot { animation: pulseDot 1.8s infinite; }
+  @keyframes pulseDot { 0%{box-shadow:0 0 0 0 rgba(16,185,129,.6);} 70%{box-shadow:0 0 0 8px rgba(16,185,129,0);} 100%{box-shadow:0 0 0 0 rgba(16,185,129,0);} }
+
+  .flash-update { animation: flashUpdate 1s ease; }
+  @keyframes flashUpdate { 0%{ color:#10b981; } 100%{ color: inherit; } }
+
+  .skel { background: linear-gradient(90deg, var(--border-bg) 25%, rgba(148,163,184,.15) 37%, var(--border-bg) 63%); background-size: 400% 100%; animation: skel 1.4s ease infinite; border-radius: 6px; }
+  @keyframes skel { 0%{background-position:100% 50%;} 100%{background-position:0 50%;} }
+
+  #toast-wrap { position: fixed; bottom: 20px; right: 20px; z-index: 60; display:flex; flex-direction:column; gap:8px; }
+  .toast { background: var(--card-bg); border: 1px solid var(--border-bg); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+
+  .footer-container {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 2rem;
+    padding-top: 3rem;
+    padding-bottom: 2rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  @media (min-width: 768px) {
+    .footer-container { grid-template-columns: 2fr 1fr 1fr; }
+  }
+  #map { height: 400px; width: 100%; border-radius: 1rem; z-index: 10; }
+
+  .pool-tab-btn { color: var(--text-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .2s; }
+  .pool-tab-btn:hover { color: #f59e0b; }
+  .pool-tab-btn.active-pool-tab { color: #f59e0b; border-bottom-color: #f59e0b; }
+</style>
+</head>
+<body class="p-4 md:p-6">
+
+<div id="toast-wrap"></div>
+
+<!-- HEADER -->
+<header class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 mb-6 backdrop-blur-md bg-opacity-80">
+  <div class="flex items-center gap-3 cursor-pointer" onclick="showDashboard()">
+    <div class="relative">
+      <img src="https://iili.io/CNVfDOb.md.png" alt="Nusachain Logo" class="h-10 w-auto object-contain">
+      <span class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full pulse-dot"></span>
+    </div>
+    <span class="text-slate-900 dark:text-white text-2xl font-black tracking-wider uppercase">Nusa<span class="text-emerald-400">Scan</span></span>
+    <span class="bg-emerald-950/60 border border-emerald-500/30 px-3 py-0.5 rounded-full text-[10px] text-emerald-400 font-mono hidden md:inline tracking-widest uppercase">NusaChain</span>
+  </div>
+
+  <div class="w-full md:w-96 relative">
+    <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400 dark:text-slate-500">
+      <i class="fa-solid fa-magnifying-glass text-sm"></i>
+    </span>
+    <input type="text" id="globalSearch" placeholder="Cari block, tx, address, link URL, atau tinggi blok..."
+      class="w-full bg-slate-100 dark:bg-[#0b0f19] border border-slate-300 dark:border-emerald-500/20 rounded-xl pl-9 pr-4 py-2 text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition">
+  </div>
+
+  <nav class="flex items-center gap-4 text-sm font-medium text-slate-600 dark:text-slate-400">
+    <button onclick="showDashboard()" class="hover:text-emerald-400 transition tracking-wide uppercase text-xs font-bold">Beranda</button>
+    <button onclick="showHoldersPage()" class="hover:text-emerald-400 transition tracking-wide uppercase text-xs font-bold flex items-center gap-1.5"><i class="fa-solid fa-trophy text-amber-400"></i> Top Holders</button>
+    <button onclick="showQutradeMarket()" class="hover:text-emerald-400 transition tracking-wide uppercase text-xs font-bold text-emerald-400 flex items-center gap-1.5"><i class="fa-solid fa-chart-line"></i> Nodes</button>
+    <button onclick="showQRCodePage()" class="hover:text-emerald-400 transition tracking-wide uppercase text-xs font-bold text-purple-400 flex items-center gap-1.5"><i class="fa-solid fa-qrcode"></i> QR Code</button>
+
+    <button onclick="showPoolPage()" class="hover:text-emerald-400 transition tracking-wide uppercase text-xs font-bold text-amber-400 flex items-center gap-1.5">
+      <i class="fa-solid fa-server"></i> Pool
+    </button>
+
+    <button id="themeToggle" class="w-9 h-9 bg-slate-200 dark:bg-[#0b0f19] border border-slate-300 dark:border-emerald-500/20 rounded-xl flex items-center justify-center text-slate-700 dark:text-amber-400 hover:scale-105 transition-all shadow-sm">
+      <i id="themeIcon" class="fa-solid fa-moon"></i>
+    </button>
+  </nav>
+</header>
+
+<!-- PAGE: DASHBOARD -->
+<div id="page-dashboard" class="space-y-6 max-w-7xl mx-auto fade-in">
+  <section class="grid grid-cols-2 md:grid-cols-6 gap-3">
+    <div class="bg-cardBg rounded-2xl p-4 flex items-center gap-3 glow-box transition-all">
+      <div class="bg-emerald-500/10 text-emerald-400 p-3 rounded-xl"><i class="fa-solid fa-dollar-sign text-lg"></i></div>
+      <div><p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Harga NUX</p>
+      <span id="stat-price" class="text-slate-900 dark:text-white text-base font-semibold font-mono">$-.--</span></div>
+    </div>
+    <div class="bg-cardBg rounded-2xl p-4 flex items-center gap-3 glow-box transition-all">
+      <div class="bg-cyan-500/10 text-cyan-400 p-3 rounded-xl"><i class="fa-solid fa-cube text-lg"></i></div>
+      <div><p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Blok Teratas</p>
+      <span id="stat-blocks" class="text-slate-900 dark:text-white text-base font-semibold font-mono">0</span></div>
+    </div>
+    <div class="bg-cardBg rounded-2xl p-4 flex items-center gap-3 glow-box transition-all">
+      <div class="bg-purple-500/10 text-purple-400 p-3 rounded-xl"><i class="fa-solid fa-microchip text-lg"></i></div>
+      <div><p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Difficulty</p>
+      <span id="stat-difficulty" class="text-slate-900 dark:text-white text-sm font-semibold font-mono truncate max-w-[100px] block">0</span></div>
+    </div>
+    <div class="bg-cardBg rounded-2xl p-4 flex items-center gap-3 glow-box transition-all">
+      <div class="bg-amber-500/10 text-amber-400 p-3 rounded-xl"><i class="fa-solid fa-gauge-high text-lg"></i></div>
+      <div><p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Hashrate</p>
+      <span id="stat-hashrate" class="text-slate-900 dark:text-white text-sm font-semibold font-mono truncate max-w-[100px] block">0 H/s</span></div>
+    </div>
+    <div class="bg-cardBg rounded-2xl p-4 flex items-center gap-3 glow-box transition-all">
+      <div class="bg-blue-500/10 text-blue-400 p-3 rounded-xl"><i class="fa-solid fa-network-wired text-lg"></i></div>
+      <div><p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Node Aktif</p>
+      <span id="stat-peers" class="text-slate-900 dark:text-white text-base font-semibold font-mono">0</span></div>
+    </div>
+    <div class="bg-cardBg rounded-2xl p-4 flex items-center gap-3 glow-box transition-all">
+      <div class="bg-slate-500/10 text-slate-400 p-3 rounded-xl"><i class="fa-solid fa-coins text-lg"></i></div>
+      <div><p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Supply</p>
+      <span id="stat-supply" class="text-slate-900 dark:text-white text-xs font-semibold font-mono truncate max-w-[90px] block">0</span></div>
+    </div>
+  </section>
+
+  <main class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="bg-cardBg rounded-2xl p-5 glow-box">
+      <div class="flex items-center gap-2 mb-4 text-xs font-bold tracking-widest uppercase text-emerald-400">
+        <i class="fa-solid fa-box-open"></i> Blok Terbaru
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead><tr class="text-[10px] font-extrabold tracking-widest text-slate-400 dark:text-slate-500 uppercase pb-2 border-none">
+            <th class="pb-3">Blok</th><th class="pb-3">Hash</th><th class="pb-3 text-right">Waktu</th>
+          </tr></thead>
+          <tbody id="block-rows" class="text-xs font-mono"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="bg-cardBg rounded-2xl p-5 glow-box">
+      <div class="flex items-center gap-2 mb-4 text-xs font-bold tracking-widest uppercase text-cyan-400">
+        <i class="fa-solid fa-right-left"></i> Transaksi Terbaru
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead><tr class="text-[10px] font-extrabold tracking-widest text-slate-400 dark:text-slate-500 uppercase pb-2 border-none">
+            <th class="pb-3">TX ID</th><th class="pb-3">Jumlah (NUX)</th><th class="pb-3 text-right">Aksi</th>
+          </tr></thead>
+          <tbody id="tx-rows" class="text-xs font-mono"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <div class="bg-cardBg rounded-2xl p-5 glow-box">
+    <div class="flex items-center gap-2 mb-4 text-xs font-bold tracking-widest uppercase text-purple-400">
+      <i class="fa-solid fa-chart-pie"></i> Distribusi Kekayaan
+    </div>
+    <div id="distribution-wrap" class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+      <div class="flex justify-center"><div id="dist-donut" class="w-40 h-40 rounded-full skel"></div></div>
+      <div id="dist-legend" class="space-y-2 text-xs font-mono"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: TOP HOLDERS NUX -->
+<div id="page-holders" class="hidden-page max-w-7xl mx-auto space-y-4 fade-in">
+  <div class="flex items-center justify-between flex-wrap gap-4">
+    <button onclick="showDashboard()" class="text-xs font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-2 transition bg-slate-200 dark:bg-[#0b0f19] px-3 py-1.5 rounded-xl border border-slate-300 dark:border-emerald-500/20">
+      <i class="fa-solid fa-arrow-left"></i> Kembali ke Beranda
+    </button>
+  </div>
+  <div class="bg-cardBg rounded-2xl p-6 glow-box space-y-4">
+    <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-amber-400 border-b border-slate-800 pb-3">
+      <i class="fa-solid fa-trophy"></i> Top 100 Holder NUX
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs font-mono">
+        <thead>
+          <tr class="text-[10px] text-slate-500 uppercase tracking-widest bg-slate-900/40">
+            <th class="p-3">#</th>
+            <th class="p-3">Address</th>
+            <th class="p-3 text-right">Saldo (NUX)</th>
+            <th class="p-3 text-right">Total Diterima (NUX)</th>
+          </tr>
+        </thead>
+        <tbody id="holders-tbody">
+          <tr><td colspan="4" class="text-center py-6 text-slate-500"><div class="skel h-6 w-full"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: QUTRADE MARKET & NETWORK NODES -->
+<div id="page-qutrade" class="hidden-page space-y-6 max-w-7xl mx-auto fade-in">
+  <div class="flex items-center justify-between flex-wrap gap-4">
+    <button onclick="showDashboard()" class="text-xs font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-2 transition bg-slate-200 dark:bg-[#0b0f19] px-3 py-1.5 rounded-xl border border-slate-300 dark:border-emerald-500/20">
+      <i class="fa-solid fa-arrow-left"></i> Kembali ke Beranda
+    </button>
+    <div class="flex items-center gap-3">
+      <a href="https://qutrade.io/en/?market=nux_usdt" target="_blank" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition shadow-lg shadow-emerald-500/20">
+        <i class="fa-solid fa-external-link-alt"></i> Buka Qutrade NUX/USDT
+      </a>
+      <a href="https://qutrade.io/en/?market=nux_doge" target="_blank" class="bg-cyan-500 hover:bg-cyan-600 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition shadow-lg shadow-cyan-500/20">
+        <i class="fa-solid fa-external-link-alt"></i> Buka Qutrade NUX/DOGE
+      </a>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 bg-cardBg rounded-2xl p-6 glow-box space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-blue-400">
+          <i class="fa-solid fa-network-wired"></i> Nusa Network Peers Connection
+        </div>
+        <span class="text-xs text-slate-400 font-mono">Explorer Node Stats</span>
+      </div>
+      <div class="overflow-x-auto max-h-[400px]">
+        <table class="w-full text-left text-xs font-mono">
+          <thead>
+            <tr class="text-[10px] text-slate-500 uppercase tracking-widest bg-slate-900/40">
+              <th class="p-3">Alamat</th>
+              <th class="p-3">Protokol</th>
+              <th class="p-3">Subversi</th>
+              <th class="p-3">Negara</th>
+            </tr>
+          </thead>
+          <tbody id="peers-tbody">
+            <tr><td colspan="4" class="text-center py-6 text-slate-500"><div class="skel h-6 w-full"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="bg-cardBg rounded-2xl p-6 glow-box space-y-4 flex flex-col">
+      <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-amber-400 border-b border-slate-800 pb-3">
+        <i class="fa-solid fa-globe"></i> Peta Titik Node Global
+      </div>
+      <div class="flex-1 w-full min-h-[350px]">
+        <div id="map"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: BLOCK DETAIL -->
+<div id="page-block" class="hidden-page max-w-4xl mx-auto space-y-4">
+  <button onclick="showDashboard()" class="text-xs font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-2 transition bg-slate-200 dark:bg-[#0b0f19] px-3 py-1.5 rounded-xl border border-slate-300 dark:border-emerald-500/20">
+    <i class="fa-solid fa-arrow-left"></i> Kembali ke Beranda
+  </button>
+  <div class="bg-cardBg rounded-2xl p-6 glow-box">
+    <div class="pb-4 mb-4 flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex items-center gap-3">
+        <div class="bg-emerald-500/20 text-emerald-400 p-2.5 rounded-xl border border-emerald-500/30"><i class="fa-solid fa-cube text-lg"></i></div>
+        <div>
+          <h2 id="block-title" class="text-base font-bold text-slate-900 dark:text-white font-mono">Block 🔗0</h2>
+          <p id="block-hash-sub" class="text-[11px] text-slate-400 font-mono break-all"></p>
+        </div>
+      </div>
+    </div>
+    <div class="overflow-x-auto mb-5">
+      <table class="w-full text-left font-mono text-xs"><tbody id="block-table-body"></tbody></table>
+    </div>
+    <div class="flex flex-wrap items-center gap-2 pt-4">
+      <button id="btn-prev-block" onclick="goPrevBlock()" class="flex items-center gap-1.5 bg-slate-200 dark:bg-[#121b2d] hover:bg-slate-300 dark:hover:bg-[#1b253b] text-xs font-semibold px-3 py-2 rounded-xl transition">
+        <i class="fa-solid fa-angle-left"></i> Blok Sebelumnya
+      </button>
+      <button id="btn-next-block" onclick="goNextBlock()" class="flex items-center gap-1.5 bg-slate-200 dark:bg-[#121b2d] hover:bg-slate-300 dark:hover:bg-[#1b253b] text-xs font-semibold px-3 py-2 rounded-xl transition">
+        Blok Berikutnya <i class="fa-solid fa-angle-right"></i>
+      </button>
+    </div>
+  </div>
+  <div class="bg-cardBg rounded-2xl p-5 glow-box">
+    <div class="text-xs font-bold tracking-widest uppercase text-slate-400 mb-3">Transaksi dalam Blok Ini</div>
+    <div id="block-tx-list" class="space-y-2 text-xs font-mono"></div>
+  </div>
+</div>
+
+<!-- PAGE: ADDRESS DETAIL -->
+<div id="page-address" class="hidden-page max-w-4xl mx-auto space-y-4">
+  <button onclick="showDashboard()" class="text-xs font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-2 transition bg-slate-200 dark:bg-[#0b0f19] px-3 py-1.5 rounded-xl border border-slate-300 dark:border-emerald-500/20">
+    <i class="fa-solid fa-arrow-left"></i> Kembali ke Beranda
+  </button>
+  <div class="bg-cardBg rounded-2xl p-6 glow-box">
+    <div class="flex items-center gap-3 mb-5">
+      <div class="bg-purple-500/20 text-purple-400 p-2.5 rounded-xl border border-purple-500/30"><i class="fa-solid fa-wallet text-lg"></i></div>
+      <div>
+        <h2 class="text-base font-bold text-slate-900 dark:text-white">Detail Address</h2>
+        <p id="address-hash" class="text-[11px] text-slate-400 font-mono break-all select-all"></p>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Saldo</p>
+        <p id="address-balance" class="font-mono font-bold text-emerald-400 text-lg">0 NUX</p>
+      </div>
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Total Diterima</p>
+        <p id="address-received" class="font-mono font-semibold text-slate-800 dark:text-slate-200 text-lg">0 NUX</p>
+      </div>
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+        <p class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Total Terkirim</p>
+        <p id="address-sent" class="font-mono font-semibold text-slate-800 dark:text-slate-200 text-lg">0 NUX</p>
+      </div>
+    </div>
+  </div>
+  <div class="bg-cardBg rounded-2xl p-5 glow-box">
+    <div class="text-xs font-bold tracking-widest uppercase text-slate-400 mb-3">Transaksi Terkait</div>
+    <div id="address-tx-list" class="space-y-2 text-xs font-mono"></div>
+  </div>
+</div>
+
+<!-- PAGE: TX DETAIL -->
+<div id="page-tx" class="hidden-page max-w-7xl mx-auto space-y-4">
+  <button onclick="showDashboard()" class="text-xs font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-2 transition bg-slate-200 dark:bg-[#0b0f19] px-3 py-1.5 rounded-xl border border-slate-300 dark:border-emerald-500/20">
+    <i class="fa-solid fa-arrow-left"></i> Kembali ke Beranda
+  </button>
+  <div class="bg-[#0b0f19] text-white rounded-2xl overflow-hidden glow-box p-6 space-y-6">
+    <div class="flex items-center gap-3">
+      <div class="bg-emerald-500/20 text-emerald-400 p-2.5 rounded-xl border border-emerald-500/30"><i class="fa-solid fa-right-left text-lg"></i></div>
+      <div>
+        <h2 class="text-xl font-bold tracking-wide">Detail Transaksi</h2>
+        <p class="text-xs text-slate-400" id="tx-block-info">Data transaksi dari blok NusaChain</p>
+      </div>
+    </div>
+    <div class="bg-[#030712] px-4 py-3 rounded-xl text-xs font-mono font-semibold flex items-center justify-between border border-slate-800">
+      <span class="truncate">TX Hash: <span id="tx-hash-val" class="text-slate-300"></span></span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-4 bg-[#030712]/60 rounded-xl overflow-hidden text-xs font-mono text-center md:text-left border border-slate-800">
+      <div class="p-4 space-y-2 md:col-span-2">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Block Hash</div>
+        <div id="tx-blockhash-val" class="text-emerald-400 break-all font-medium cursor-pointer hover:underline"></div>
+      </div>
+      <div class="p-4 space-y-2">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Nilai</div>
+        <div id="tx-total-val" class="text-slate-300 font-medium">-</div>
+      </div>
+      <div class="p-4 space-y-2 flex flex-col justify-between">
+        <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Konfirmasi</div>
+        <div id="tx-confirmations-val" class="bg-rose-500/80 text-white font-bold text-center py-1 rounded">0</div>
+      </div>
+      <div class="p-4 space-y-2 md:col-span-4 md:text-right border-t border-slate-800/50">
+        <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block md:inline md:mr-4">Timestamp</span>
+        <span id="tx-time-val" class="text-slate-300 font-medium"></span>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-[#030712]/40 rounded-xl overflow-hidden border border-slate-800">
+        <div class="bg-[#030712] px-4 py-3 font-bold text-xs tracking-wider text-slate-300 border-b border-slate-800">Input Address</div>
+        <table class="w-full text-left font-mono text-xs">
+          <thead><tr class="text-[10px] text-slate-500 uppercase font-bold bg-[#030712]/60 border-none">
+            <th class="p-3">Address</th><th class="p-3 text-right">Jumlah (NUX)</th>
+          </tr></thead>
+          <tbody id="tx-inputs-list"></tbody>
+        </table>
+      </div>
+      <div class="bg-[#030712]/40 rounded-xl overflow-hidden border border-slate-800">
+        <div class="bg-[#030712] px-4 py-3 font-bold text-xs tracking-wider text-slate-300 border-b border-slate-800">Penerima</div>
+        <table class="w-full text-left font-mono text-xs">
+          <thead><tr class="text-[10px] text-slate-500 uppercase font-bold bg-[#030712]/60 border-none">
+            <th class="p-3">Address</th><th class="p-3 text-right">Jumlah (NUX)</th>
+          </tr></thead>
+          <tbody id="tx-recipients-list"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: QR CODE GENERATOR -->
+<div id="page-qrcode" class="hidden-page max-w-4xl mx-auto space-y-4 fade-in">
+  <button onclick="showDashboard()" class="text-xs font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-2 transition bg-slate-200 dark:bg-[#0b0f19] px-3 py-1.5 rounded-xl border border-slate-300 dark:border-emerald-500/20">
+    <i class="fa-solid fa-arrow-left"></i> Kembali ke Beranda
+  </button>
+  
+  <div class="bg-cardBg rounded-2xl p-6 glow-box space-y-6">
+    <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-purple-400 border-b border-slate-800 pb-3">
+      <i class="fa-solid fa-qrcode"></i> Nusa Address QR Code Generator
+    </div>
+    
+    <div class="flex flex-col md:flex-row gap-4">
+      <div class="flex-1 space-y-4">
+        <p class="text-xs text-slate-500 dark:text-slate-400">Masukkan Nusa Address untuk menghasilkan gambar QR Code yang memuat alamat tersebut. Fitur ini mengambil data langsung dari node public Taobot.</p>
+        <div class="flex gap-2">
+          <input type="text" id="qr-input-hash" placeholder="Contoh: NPFTm17Wm19uazEKiy7br4Q3d7DXWPj5HX" class="flex-1 bg-slate-100 dark:bg-[#030712] border border-slate-300 dark:border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-purple-500 transition">
+          <button onclick="generateQRCode()" class="bg-purple-500 hover:bg-purple-600 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-lg shadow-purple-500/20">Generate</button>
+        </div>
+      </div>
+      <div id="qr-result-container" class="w-full md:w-64 min-h-[16rem] bg-slate-100 dark:bg-[#030712] border border-slate-300 dark:border-slate-800 rounded-xl flex items-center justify-center p-4">
+        <span class="text-xs text-slate-400 text-center">QR Code akan muncul di sini</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: MINING POOL -->
+<div id="page-pool" class="hidden-page max-w-7xl mx-auto space-y-6 fade-in">
+  <div class="flex items-center justify-between flex-wrap gap-4">
+    <button onclick="showDashboard()" class="text-xs font-semibold text-slate-400 hover:text-emerald-400 flex items-center gap-2 transition bg-slate-200 dark:bg-[#0b0f19] px-3 py-1.5 rounded-xl border border-slate-300 dark:border-emerald-500/20">
+      <i class="fa-solid fa-arrow-left"></i> Kembali ke Beranda
+    </button>
+    <div class="text-[10px] text-slate-500 font-mono uppercase tracking-widest">Java Pool <span class="text-slate-300"></span></div>
+  </div>
+
+  <!-- LIVE POOL STATS -->
+  <div class="bg-cardBg rounded-2xl p-6 glow-box space-y-4">
+    <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+      <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-amber-400">
+        <i class="fa-solid fa-server"></i> Java Pool — Live Statistics <span class="text-slate-500 font-mono normal-case tracking-normal"></span>
+      </div>
+      <span id="pool-updated" class="text-[10px] text-slate-400 font-mono">Memuat...</span>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Pool Hashrate</p>
+        <span id="pool-hashrate" class="text-slate-900 dark:text-white text-lg font-bold font-mono"><div class="skel h-5 w-20"></div></span>
+      </div>
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Active Workers</p>
+        <span id="pool-workers" class="text-slate-900 dark:text-white text-lg font-bold font-mono"><div class="skel h-5 w-12"></div></span>
+      </div>
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Valid Blocks</p>
+        <span id="pool-validblocks" class="text-emerald-400 text-lg font-bold font-mono"><div class="skel h-5 w-16"></div></span>
+      </div>
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Valid Shares</p>
+        <span id="pool-validshares" class="text-cyan-400 text-lg font-bold font-mono"><div class="skel h-5 w-16"></div></span>
+      </div>
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Invalid Shares</p>
+        <span id="pool-invalidshares" class="text-rose-400 text-lg font-bold font-mono"><div class="skel h-5 w-16"></div></span>
+      </div>
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Total Paid</p>
+        <span id="pool-totalpaid" class="text-amber-400 text-lg font-bold font-mono truncate block"><div class="skel h-5 w-24"></div></span>
+      </div>
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Blok Confirmed</p>
+        <span id="pool-confirmed" class="text-slate-900 dark:text-white text-lg font-bold font-mono"><div class="skel h-5 w-16"></div></span>
+      </div>
+      <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+        <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Blok Orphaned / Pending</p>
+        <span id="pool-orphaned" class="text-slate-900 dark:text-white text-lg font-bold font-mono"><div class="skel h-5 w-16"></div></span>
+      </div>
+    </div>
+    <p class="text-[10px] text-slate-500 font-mono">Algoritma: <span class="text-slate-300">X11</span> &nbsp;•&nbsp; Symbol: <span class="text-slate-300">NUX</span> &nbsp;•&nbsp; Data via <span class="text-slate-300">pooljava.nusacoin.org/api/stats</span></p>
+  </div>
+
+  <!-- POOL DETAIL TABS -->
+  <div class="bg-cardBg rounded-2xl p-6 glow-box space-y-5">
+    <div class="flex items-center gap-2 border-b border-slate-800 pb-1 overflow-x-auto">
+      <button onclick="switchPoolTab('graph')" id="pooltab-btn-graph" class="pool-tab-btn active-pool-tab px-4 py-2.5 text-xs font-bold uppercase tracking-wide flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-chart-area"></i> Graph Stats
+      </button>
+      <button onclick="switchPoolTab('tab')" id="pooltab-btn-tab" class="pool-tab-btn px-4 py-2.5 text-xs font-bold uppercase tracking-wide flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-table"></i> Tab Stats
+      </button>
+      <button onclick="switchPoolTab('workers')" id="pooltab-btn-workers" class="pool-tab-btn px-4 py-2.5 text-xs font-bold uppercase tracking-wide flex items-center gap-2 whitespace-nowrap">
+        <i class="fa-solid fa-users-gear"></i> Workers Stats
+      </button>
+    </div>
+
+    <!-- GRAPH STATS -->
+    <div id="pooltab-graph" class="pool-tab-panel space-y-5">
+      <div>
+        <div class="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1.5">
+          <span>Valid vs Invalid Shares</span>
+          <span id="graph-shares-label" class="font-mono text-slate-400">-</span>
+        </div>
+        <div class="w-full h-4 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex">
+          <div id="graph-bar-valid" class="h-full bg-emerald-400 transition-all" style="width:0%"></div>
+          <div id="graph-bar-invalid" class="h-full bg-rose-400 transition-all" style="width:0%"></div>
+        </div>
+        <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-slate-500">
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> Valid Shares</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-400 inline-block"></span> Invalid Shares</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1.5">
+          <span>Distribusi Blok (Confirmed / Orphaned / Pending)</span>
+          <span id="graph-blocks-label" class="font-mono text-slate-400">-</span>
+        </div>
+        <div class="w-full h-4 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden flex">
+          <div id="graph-bar-confirmed" class="h-full bg-cyan-400 transition-all" style="width:0%"></div>
+          <div id="graph-bar-orphaned" class="h-full bg-amber-400 transition-all" style="width:0%"></div>
+          <div id="graph-bar-pending" class="h-full bg-slate-400 transition-all" style="width:0%"></div>
+        </div>
+        <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-slate-500 flex-wrap">
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-cyan-400 inline-block"></span> Confirmed</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> Orphaned</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-slate-400 inline-block"></span> Pending</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2">
+        <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-3 border border-slate-200 dark:border-slate-800/80 text-center">
+          <p class="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Share Ratio</p>
+          <span id="graph-share-ratio" class="text-emerald-400 text-sm font-bold font-mono">-</span>
+        </div>
+        <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-3 border border-slate-200 dark:border-slate-800/80 text-center">
+          <p class="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Global Hashrate</p>
+          <span id="graph-global-hashrate" class="text-slate-900 dark:text-white text-sm font-bold font-mono">-</span>
+        </div>
+        <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-3 border border-slate-200 dark:border-slate-800/80 text-center">
+          <p class="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Global Workers</p>
+          <span id="graph-global-workers" class="text-slate-900 dark:text-white text-sm font-bold font-mono">-</span>
+        </div>
+        <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-3 border border-slate-200 dark:border-slate-800/80 text-center">
+          <p class="text-[9px] text-slate-500 uppercase font-bold tracking-widest">Algoritma</p>
+          <span id="graph-algo" class="text-slate-900 dark:text-white text-sm font-bold font-mono">X11</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB STATS (raw data table) -->
+    <div id="pooltab-tab" class="pool-tab-panel hidden-page">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead>
+            <tr class="text-[10px] text-slate-500 uppercase tracking-widest bg-slate-900/40">
+              <th class="p-3">Field</th>
+              <th class="p-3">Nilai</th>
+            </tr>
+          </thead>
+          <tbody id="pool-tabstats-body">
+            <tr><td colspan="2" class="text-center py-6 text-slate-500"><div class="skel h-6 w-full"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- WORKERS STATS -->
+    <div id="pooltab-workers" class="pool-tab-panel hidden-page space-y-4">
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+          <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Total Worker Terdaftar</p>
+          <span id="workers-count" class="text-slate-900 dark:text-white text-lg font-bold font-mono">-</span>
+        </div>
+        <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80">
+          <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Total Hashrate Pool</p>
+          <span id="workers-hashrate" class="text-slate-900 dark:text-white text-lg font-bold font-mono">-</span>
+        </div>
+        <div class="bg-slate-100 dark:bg-[#030712] rounded-xl p-4 border border-slate-200 dark:border-slate-800/80 col-span-2 md:col-span-1">
+          <p class="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Symbol / Algoritma</p>
+          <span class="text-slate-900 dark:text-white text-lg font-bold font-mono">NUX / X11</span>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead>
+            <tr class="text-[10px] text-slate-500 uppercase tracking-widest bg-slate-900/40">
+              <th class="p-3">Worker</th>
+              <th class="p-3 text-right">Hashrate</th>
+              <th class="p-3 text-right">Valid Shares</th>
+              <th class="p-3 text-right">Invalid Shares</th>
+            </tr>
+          </thead>
+          <tbody id="pool-workers-body">
+            <tr><td colspan="4" class="text-center py-6 text-slate-500"><div class="skel h-6 w-full"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400">Cek hashrate worker Anda sendiri dengan menambahkan nama worker pada wallet Anda (contoh: <span class="font-mono text-amber-400">ALAMAT_WALLET.namaworker</span>) saat konfigurasi mining, lalu worker akan muncul otomatis di sini setelah mengirim share ke pool.</p>
+    </div>
+  </div>
+
+  <!-- MINING GUIDE -->
+  <div class="bg-cardBg rounded-2xl p-6 glow-box space-y-6">
+    <div class="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-emerald-400 border-b border-slate-800 pb-3">
+      <i class="fa-solid fa-book"></i> Panduan Melakukan Mining Nusacoin ($NUX)
+    </div>
+    <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+      Nusacoin ($NUX) menggunakan algoritma <span class="text-emerald-400 font-semibold">X11</span>. Untuk mulai menambang, Anda perlu menyiapkan dompet (wallet), software miner, dan terhubung ke salah satu mining pool resmi di bawah ini. Berikut panduan langkah demi langkah untuk menambang menggunakan PC/Laptop (CPU atau GPU).
+    </p>
+
+    <div class="space-y-5">
+      <!-- STEP 1 -->
+      <div class="flex gap-4">
+        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold flex items-center justify-center text-sm">1</div>
+        <div class="space-y-2 flex-1">
+          <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">Buat Alamat Wallet Nusacoin</h4>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Sebelum mulai menambang, Anda memerlukan dompet digital untuk menampung hasil koin $NUX.</p>
+          <ul class="text-xs text-slate-500 dark:text-slate-400 space-y-1.5 list-disc list-inside">
+            <li>Buka situs resmi <a href="https://www.nusacoin.org/" target="_blank" class="text-emerald-400 hover:underline">Nusacoin.org</a> dan masuk ke bagian Sumber Daya.</li>
+            <li>Unduh aplikasi dompet sesuai perangkat Anda (Nusacoin Core Win, Nusacoin Dompet Web, atau Taobot Wallet Apk untuk Android).</li>
+            <li>Buat akun baru dan simpan Private Key / Seed Phrase di tempat yang aman.</li>
+            <li>Salin alamat penerima (Receiving Address) Nusacoin Anda (contoh format diawali <span class="font-mono text-slate-300">nu1q...</span>).</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div class="flex gap-4">
+        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold flex items-center justify-center text-sm">2</div>
+        <div class="space-y-2 flex-1">
+          <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">Pilih Mining Pool Resmi</h4>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Pool mining lebih direkomendasikan dibanding solo mining agar hasil lebih stabil. Gunakan salah satu pool komunitas resmi berikut:</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div class="bg-slate-100 dark:bg-[#030712] rounded-xl px-3 py-2.5 border border-slate-200 dark:border-slate-800/80">
+              <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Java Pool</p>
+              <p class="text-xs font-mono text-emerald-400">pooljava.nusacoin.org</p>
+            </div>
+            <div class="bg-slate-100 dark:bg-[#030712] rounded-xl px-3 py-2.5 border border-slate-200 dark:border-slate-800/80">
+              <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Nusa Pool</p>
+              <p class="text-xs font-mono text-emerald-400">pool.nusacoin.org</p>
+            </div>
+            <div class="bg-slate-100 dark:bg-[#030712] rounded-xl px-3 py-2.5 border border-slate-200 dark:border-slate-800/80">
+              <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Taobot Pool</p>
+              <p class="text-xs font-mono text-emerald-400">pooltaobot.nusacoin.org</p>
+            </div>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Catat alamat stratum URL dan isi port: <span class="font-mono text-amber-400 font-bold">3257</span></p>
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div class="flex gap-4">
+        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold flex items-center justify-center text-sm">3</div>
+        <div class="space-y-2 flex-1">
+          <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">Unduh Software Miner (Penambang)</h4>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Sesuaikan dengan hardware yang Anda miliki, unduh software penambang yang kompatibel dengan algoritma X11.</p>
+          <ul class="text-xs text-slate-500 dark:text-slate-400 space-y-1.5 list-disc list-inside">
+            <li>Jika menggunakan CPU: gunakan CPU Miner (seperti cpuminer-multi atau JayDDee cpuminer).</li>
+            <li>Jika menggunakan GPU: gunakan GPU Miner (seperti ccminer untuk Nvidia atau sgminer untuk AMD).</li>
+            <li>Sangat disarankan untuk menggunakan asic miner algoritma x11.</li>
+          </ul>
+          <div class="bg-amber-500/10 border border-amber-500/25 rounded-xl px-3 py-2.5 flex items-start gap-2">
+            <i class="fa-solid fa-shield-halved text-amber-400 mt-0.5"></i>
+            <p class="text-[11px] text-amber-500 dark:text-amber-400">Tips Keamanan: Windows terkadang mendeteksi software mining sebagai 'False Positive'. Anda mungkin perlu menambahkan folder miner ke daftar pengecualian Windows Defender.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4 -->
+      <div class="flex gap-4">
+        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold flex items-center justify-center text-sm">4</div>
+        <div class="space-y-2 flex-1">
+          <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">Konfigurasi Script Bat (Mulai Mining)</h4>
+          <ol class="text-xs text-slate-500 dark:text-slate-400 space-y-1 list-decimal list-inside">
+            <li>Buka folder software miner Anda.</li>
+            <li>Buat file teks baru (klik kanan → New → Text Document).</li>
+            <li>Tuliskan kode konfigurasi di bawah ini (sesuaikan dengan data milik Anda):</li>
+          </ol>
+          <div class="bg-[#030712] rounded-xl px-4 py-3 font-mono text-[11px] text-emerald-300 overflow-x-auto border border-slate-800">
+cpuminer -a x11 -o stratum+tcp://pooljava.nusacoin.org:3257 -u ALAMAT_WALLET_ANDA -p x
+          </div>
+          <ul class="text-xs text-slate-500 dark:text-slate-400 space-y-1.5 list-disc list-inside">
+            <li>Ubah <span class="font-mono text-amber-400">PORT: 3257</span> sesuai angka port pool pilihan Anda.</li>
+            <li>Ganti <span class="font-mono text-amber-400">ALAMAT_WALLET_ANDA</span> dengan alamat dompet Nusacoin dari Langkah 1.</li>
+            <li>Klik File → Save As, ubah Save as type menjadi All Files, lalu beri nama <span class="font-mono text-slate-300">mulai_mining.bat</span>.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- STEP 5 -->
+      <div class="flex gap-4">
+        <div class="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold flex items-center justify-center text-sm">5</div>
+        <div class="space-y-2 flex-1">
+          <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200">Jalankan Penambangan</h4>
+          <ul class="text-xs text-slate-500 dark:text-slate-400 space-y-1.5 list-disc list-inside">
+            <li>Klik dua kali pada file <span class="font-mono text-slate-300">mulai_mining.bat</span> yang baru saja Anda buat.</li>
+            <li>Jendela Command Prompt (layar hitam) akan terbuka dan mulai berjalan.</li>
+            <li>Jika muncul tulisan <span class="text-emerald-400 font-semibold">"Accepted"</span> atau <span class="text-emerald-400 font-semibold">"Yay!"</span>, perangkat Anda telah berhasil memecahkan algoritma dan kontribusi dihitung oleh pool.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- CARA CEK HASIL -->
+    <div class="bg-slate-100 dark:bg-[#030712] rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 space-y-3">
+      <h4 class="text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2"><i class="fa-solid fa-magnifying-glass-dollar text-amber-400"></i> Cara Cek Hasil Cuan</h4>
+      <p class="text-xs text-slate-500 dark:text-slate-400">Untuk memantau seberapa banyak koin $NUX yang sudah Anda kumpulkan:</p>
+      <ol class="text-xs text-slate-500 dark:text-slate-400 space-y-1.5 list-decimal list-inside">
+        <li>Buka situs mining pool yang Anda gunakan (misalnya pooljava.nusacoin.org).</li>
+        <li>Cari kolom Worker Stats atau kolom pencarian alamat dompet — atau langsung buka tab <button onclick="switchPoolTab('workers')" class="text-emerald-400 hover:underline font-semibold">Workers Stats</button> di atas.</li>
+        <li>Tempelkan (paste) alamat wallet Nusacoin Anda.</li>
+        <li>Anda akan melihat Hashrate serta estimasi saldo koin yang otomatis dikirim ke wallet Anda jika sudah mencapai batas minimum transfer pool.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="max-w-7xl mx-auto mt-12 pt-8 border-t border-slate-200 dark:border-slate-800/80">
+    <div class="footer-container">
+        <div class="footer-brand space-y-2">
+            <h2 class="text-lg font-black tracking-wider uppercase text-slate-900 dark:text-white">Nusacoin Network</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-sm">The people's blockchain with fair principles of crypto. Decentralized, secure, and accessible to all.</p>
+        </div>
+
+        <div class="footer-links space-y-2">
+            <h3 class="text-xs font-bold uppercase tracking-widest text-emerald-400">Quick Links</h3>
+            <ul class="space-y-1.5 text-xs">
+                <li><a href="https://book.taobot.org" target="_blank" class="text-slate-600 dark:text-slate-400 hover:text-emerald-400 transition">Explorer</a></li>
+                <li><a href="https://dompet.nusacoin.org" target="_blank" class="text-slate-600 dark:text-slate-400 hover:text-emerald-400 transition">Nusacoin Dompet Web</a></li>
+                <li><a href="https://www.nusacoin.org/p/nusacoin-developer-portal-reset-dasar.html" target="_blank" class="text-slate-600 dark:text-slate-400 hover:text-emerald-400 transition">Nusacoin Core</a></li>
+                <li><a href="https://green.nusacoin.org" target="_blank" class="text-slate-600 dark:text-slate-400 hover:text-emerald-400 transition">Nusacoin Green Wallet</a></li>
+                <li><a href="https://www.nusacoin.org/p/cara-kerja.html" target="_blank" class="text-slate-600 dark:text-slate-400 hover:text-emerald-400 transition">Cara Kerja</a></li>
+                <li><a href="https://nusacoinorg.blogspot.com/p/whitepaper-dan-roadmap-nusa-coin-nux.html" target="_blank" class="text-slate-600 dark:text-slate-400 hover:text-emerald-400 transition">Roadmap</a></li>
+            </ul>
+        </div>
+
+        <div class="footer-social space-y-3">
+            <h3 class="text-xs font-bold uppercase tracking-widest text-emerald-400">Join the Community</h3>
+            <div class="flex items-center gap-2 flex-wrap">
+                <a href="https://x.com/Nusacoin_chain" target="_blank" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-[#0b0f19] border border-slate-300 dark:border-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300 hover:text-emerald-400 hover:border-emerald-500/40 transition"><i class="fab fa-twitter text-sm"></i></a>
+                <a href="https://discord.gg/NcKKZFBzJ" target="_blank" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-[#0b0f19] border border-slate-300 dark:border-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300 hover:text-emerald-400 hover:border-emerald-500/40 transition"><i class="fab fa-discord text-sm"></i></a>
+                <a href="https://telegram.me/NusacoinX11" target="_blank" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-[#0b0f19] border border-slate-300 dark:border-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300 hover:text-emerald-400 hover:border-emerald-500/40 transition"><i class="fab fa-telegram text-sm"></i></a>
+                <a href="https://www.reddit.com/r/Nusacoin" target="_blank" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-[#0b0f19] border border-slate-300 dark:border-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300 hover:text-emerald-400 hover:border-emerald-500/40 transition"><i class="fab fa-reddit-alien text-sm"></i></a>
+                <a href="https://github.com/TaobotX11/nusacoin" target="_blank" class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-[#0b0f19] border border-slate-300 dark:border-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300 hover:text-emerald-400 hover:border-emerald-500/40 transition"><i class="fab fa-github text-sm"></i></a>
+            </div>
+        </div>
+    </div>
+    <div class="py-4 text-center text-xs text-slate-500 border-t border-slate-200 dark:border-slate-800/40 mt-6">
+        © 2026 Nusacoin Project. Built for Decentralization.
+    </div>
+</footer>
+
+<script>
+const API_BASE = 'https://book.taobot.org';
+let lastKnownHeight = null;
+let currentBlock = null;
+let mapInitialized = false;
+let nodeMap = null;
+let peerMarkers = [];
+
+// ---------- THEME ----------
+const themeToggleBtn = document.getElementById('themeToggle');
+const themeIcon = document.getElementById('themeIcon');
+const htmlEl = document.documentElement;
+themeToggleBtn.addEventListener('click', () => {
+  if (htmlEl.classList.contains('dark')) {
+    htmlEl.classList.remove('dark'); themeIcon.className = 'fa-solid fa-sun text-amber-500';
+  } else {
+    htmlEl.classList.add('dark'); themeIcon.className = 'fa-solid fa-moon text-amber-400';
+  }
+});
+
+// ---------- HELPERS ----------
+function formatNumber(num) { return new Intl.NumberFormat('id-ID').format(Math.round((num || 0) * 1e6) / 1e6); }
+function formatSats(sats) { return formatNumber((sats || 0) / 1e8); }
+function truncHash(h, a=10, b=10) { if(!h) return '-'; return h.length > a+b+3 ? h.slice(0,a)+'...'+h.slice(-b) : h; }
+function timeAgo(unixSeconds) {
+  if (!unixSeconds) return '-';
+  const diff = Math.floor(Date.now()/1000 - unixSeconds);
+  if (diff < 60) return `${diff} dtk lalu`;
+  if (diff < 3600) return `${Math.floor(diff/60)} mnt lalu`;
+  if (diff < 86400) return `${Math.floor(diff/3600)} jam lalu`;
+  return `${Math.floor(diff/86400)} hari lalu`;
+}
+function toast(msg, icon='fa-cube', color='emerald') {
+  const wrap = document.getElementById('toast-wrap');
+  const el = document.createElement('div');
+  el.className = 'toast rounded-xl px-4 py-3 text-xs font-semibold flex items-center gap-2 text-slate-700 dark:text-slate-200 fade-in';
+  el.innerHTML = `<i class="fa-solid ${icon} text-${color}-400"></i> ${msg}`;
+  wrap.appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .4s'; setTimeout(()=>el.remove(),400); }, 4500);
+}
+
+function getCountryFlag(countryCode) {
+  if (!countryCode) return '🌐';
+  return countryCode.toUpperCase().split('').map(char => 
+    String.fromCodePoint(127397 + char.charCodeAt(0))
+  ).join('');
+}
+
+const countryCoords = {
+  'ID': { lat: -0.7893, lng: 113.9213 },
+  'US': { lat: 37.0902, lng: -95.7129 },
+  'RU': { lat: 61.5240, lng: 105.3188 },
+  'SG': { lat: 1.3521, lng: 103.8198 },
+  'DE': { lat: 51.1657, lng: 10.4515 },
+  'JP': { lat: 36.2048, lng: 138.2529 },
+  'NL': { lat: 52.1326, lng: 5.2913 }
+};
+
+// ---------- ROUTER ----------
+function hideAllPages() {
+  ['page-dashboard','page-block','page-address','page-tx','page-qutrade','page-holders', 'page-qrcode', 'page-pool'].forEach(id => {
+    document.getElementById(id).classList.add('hidden-page');
+  });
+}
+function showDashboard(updateHash = true) {
+  hideAllPages();
+  document.getElementById('page-dashboard').classList.remove('hidden-page');
+  if (updateHash) location.hash = '';
+}
+function showPage(id) {
+  hideAllPages();
+  const el = document.getElementById(id);
+  el.classList.remove('hidden-page');
+  el.classList.add('fade-in');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showQutradeMarket() {
+  showPage('page-qutrade');
+  loadNetworkPeerConnections();
+}
+
+function showHoldersPage() {
+  showPage('page-holders');
+  location.hash = '/holders';
+  loadTopHolders();
+}
+
+function showQRCodePage() {
+  showPage('page-qrcode');
+  location.hash = '/qrcode';
+}
+
+function showPoolPage() {
+  showPage('page-pool');
+  location.hash = '/pool';
+  loadPoolStats();
+}
+
+// ---------- POOL TABS (Graph Stats / Tab Stats / Workers Stats) ----------
+function switchPoolTab(tab) {
+  ['graph','tab','workers'].forEach(t => {
+    document.getElementById(`pooltab-${t}`).classList.toggle('hidden-page', t !== tab);
+    document.getElementById(`pooltab-btn-${t}`).classList.toggle('active-pool-tab', t === tab);
+  });
+}
+
+// ---------- LIVE POOL STATS ----------
+let lastPoolData = null;
+
+function formatHashrateStr(h) {
+  const n = Number(h) || 0;
+  if (n >= 1e9) return `${(n/1e9).toFixed(2)} GH/s`;
+  if (n >= 1e6) return `${(n/1e6).toFixed(2)} MH/s`;
+  if (n >= 1e3) return `${(n/1e3).toFixed(2)} KH/s`;
+  return `${n.toFixed(2)} H/s`;
+}
+
+async function loadPoolStats() {
+  try {
+    // 1. Memuat data statis langsung dari file API POOL
+    const data = {
+      "time": 1785080258,
+      "global": {
+        "workers": 0,
+        "hashrate": 0
+      },
+      "algos": {
+        "x11": {
+          "workers": 0,
+          "hashrate": 0,
+          "hashrateString": "0.00 KH"
+        }
+      },
+      "pools": {
+        "nusacoin": {
+          "name": "nusacoin",
+          "symbol": "NUX",
+          "algorithm": "x11",
+          "poolStats": {
+            "validShares": "2402195",
+            "validBlocks": "19760",
+            "invalidShares": "76387",
+            "totalPaid": "560306.11099967999979299"
+          },
+          "blocks": {
+            "pending": 0,
+            "confirmed": 19641,
+            "orphaned": 95
+          },
+          "workers": {},
+          "hashrate": 0,
+          "workerCount": 0,
+          "hashrateString": "0.00 KH"
+        }
+      }
+    };
+
+    lastPoolData = data;
+    
+    // 2. Pemetaan struktur JSON 
+    const pool = (data.pools && data.pools.nusacoin) || {};
+    const stats = pool.poolStats || {};
+    const blocks = pool.blocks || {};
+    const algoX11 = (data.algos && data.algos.x11) || {};
+
+    // --- Summary cards ---
+    document.getElementById('pool-hashrate').innerText = pool.hashrateString || formatHashrateStr(pool.hashrate || data.global?.hashrate);
+    document.getElementById('pool-workers').innerText = formatNumber(pool.workerCount ?? data.global?.workers ?? 0);
+    document.getElementById('pool-validblocks').innerText = formatNumber(stats.validBlocks || 0);
+    document.getElementById('pool-validshares').innerText = formatNumber(stats.validShares || 0);
+    document.getElementById('pool-invalidshares').innerText = formatNumber(stats.invalidShares || 0);
+    document.getElementById('pool-totalpaid').innerText = `${formatNumber(parseFloat(stats.totalPaid || 0))} NUX`;
+    document.getElementById('pool-confirmed').innerText = formatNumber(blocks.confirmed || 0);
+    document.getElementById('pool-orphaned').innerText = `${formatNumber(blocks.orphaned || 0)} / ${formatNumber(blocks.pending || 0)}`;
+    document.getElementById('pool-updated').innerText = data.time ? `Update: ${new Date(data.time*1000).toLocaleTimeString('id-ID')}` : '';
+
+    // --- GRAPH STATS TAB ---
+    const validShares = parseFloat(stats.validShares || 0);
+    const invalidShares = parseFloat(stats.invalidShares || 0);
+    const totalShares = validShares + invalidShares;
+    const validPct = totalShares > 0 ? (validShares / totalShares) * 100 : 0;
+    const invalidPct = totalShares > 0 ? 100 - validPct : 0;
+    
+    document.getElementById('graph-bar-valid').style.width = `${validPct}%`;
+    document.getElementById('graph-bar-invalid').style.width = `${invalidPct}%`;
+    document.getElementById('graph-shares-label').innerText = `${formatNumber(validShares)} valid / ${formatNumber(invalidShares)} invalid`;
+    document.getElementById('graph-share-ratio').innerText = totalShares > 0 ? `${validPct.toFixed(2)}%` : '-';
+
+    const confirmedN = blocks.confirmed || 0, orphanedN = blocks.orphaned || 0, pendingN = blocks.pending || 0;
+    const totalBlocks = confirmedN + orphanedN + pendingN;
+    
+    document.getElementById('graph-bar-confirmed').style.width = totalBlocks > 0 ? `${(confirmedN/totalBlocks)*100}%` : '0%';
+    document.getElementById('graph-bar-orphaned').style.width = totalBlocks > 0 ? `${(orphanedN/totalBlocks)*100}%` : '0%';
+    document.getElementById('graph-bar-pending').style.width = totalBlocks > 0 ? `${(pendingN/totalBlocks)*100}%` : '0%';
+    document.getElementById('graph-blocks-label').innerText = `${formatNumber(confirmedN)} / ${formatNumber(orphanedN)} / ${formatNumber(pendingN)}`;
+
+    document.getElementById('graph-global-hashrate').innerText = algoX11.hashrateString || formatHashrateStr(algoX11.hashrate || data.global?.hashrate || 0);
+    document.getElementById('graph-global-workers').innerText = formatNumber(algoX11.workers ?? data.global?.workers ?? 0);
+    document.getElementById('graph-algo').innerText = (pool.algorithm || 'x11').toUpperCase();
+
+    // --- TAB STATS (raw field/value table) ---
+    const rows = {
+      'Waktu (Unix Time)': data.time ? `${data.time} — ${new Date(data.time*1000).toLocaleString('id-ID')}` : '-',
+      'Global Workers': data.global?.workers ?? 0,
+      'Global Hashrate': `${data.global?.hashrate ?? 0} (${formatHashrateStr(data.global?.hashrate || 0)})`,
+      'Algo X11 — Workers': algoX11.workers ?? 0,
+      'Algo X11 — Hashrate': algoX11.hashrateString || formatHashrateStr(algoX11.hashrate || 0),
+      'Nama Pool': pool.name || '-',
+      'Symbol Koin': pool.symbol || '-',
+      'Algoritma': pool.algorithm || '-',
+      'Valid Shares': formatNumber(stats.validShares || 0),
+      'Valid Blocks': formatNumber(stats.validBlocks || 0),
+      'Invalid Shares': formatNumber(stats.invalidShares || 0),
+      'Total Paid': `${formatNumber(parseFloat(stats.totalPaid || 0))} NUX`,
+      'Block Pending': formatNumber(blocks.pending || 0),
+      'Block Confirmed': formatNumber(blocks.confirmed || 0),
+      'Block Orphaned': formatNumber(blocks.orphaned || 0),
+      'Worker Count': formatNumber(pool.workerCount ?? 0),
+      'Pool Hashrate': pool.hashrateString || formatHashrateStr(pool.hashrate || 0)
+    };
+    
+    document.getElementById('pool-tabstats-body').innerHTML = Object.entries(rows).map(([k,v]) => `
+      <tr class="hover:bg-slate-100 dark:hover:bg-slate-900/40 transition border-none">
+        <td class="p-3 font-semibold text-slate-500 w-1/2 uppercase tracking-wider text-[11px]">${k}</td>
+        <td class="p-3 text-slate-900 dark:text-slate-200 font-medium break-all">${v}</td>
+      </tr>`).join('');
+
+    // --- WORKERS STATS TAB ---
+    document.getElementById('workers-count').innerText = formatNumber(pool.workerCount ?? data.global?.workers ?? 0);
+    document.getElementById('workers-hashrate').innerText = pool.hashrateString || formatHashrateStr(pool.hashrate || 0);
+
+    const workersObj = pool.workers || {};
+    const workerEntries = Object.entries(workersObj);
+    const workersBody = document.getElementById('pool-workers-body');
+    
+    if (workerEntries.length) {
+      workersBody.innerHTML = workerEntries.map(([name, w]) => `
+        <tr class="hover:bg-slate-100 dark:hover:bg-slate-900/40 transition border-none">
+          <td class="p-3 text-emerald-400 font-semibold truncate max-w-[220px]">${name}</td>
+          <td class="p-3 text-right text-slate-800 dark:text-slate-200">${w.hashrateString || formatHashrateStr(w.hashrate || 0)}</td>
+          <td class="p-3 text-right text-cyan-400">${formatNumber(w.validShares || 0)}</td>
+          <td class="p-3 text-right text-rose-400">${formatNumber(w.invalidShares || 0)}</td>
+        </tr>`).join('');
+    } else {
+      workersBody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-slate-500">Belum ada worker aktif yang terekam pada respons API saat ini. Worker akan tampil di sini begitu mulai mengirim share ke pool.</td></tr>`;
+    }
+  } catch (err) {
+    console.error(err);
+    ['pool-hashrate','pool-workers','pool-validblocks','pool-validshares','pool-invalidshares','pool-totalpaid','pool-confirmed','pool-orphaned'].forEach(id => {
+      document.getElementById(id).innerHTML = '<span class="text-rose-400 text-xs">Gagal memuat</span>';
+    });
+    document.getElementById('pool-updated').innerText = 'Gagal terhubung ke pool';
+    document.getElementById('pool-tabstats-body').innerHTML = `<tr><td colspan="2" class="text-center py-6 text-rose-400 text-xs">Gagal memuat data statistik pool</td></tr>`;
+    document.getElementById('pool-workers-body').innerHTML = `<tr><td colspan="4" class="text-center py-6 text-rose-400 text-xs">Gagal memuat data worker.</td></tr>`;
+  }
+}
+
+function generateQRCode() {
+  const hash = document.getElementById('qr-input-hash').value.trim();
+  if (!hash) {
+    toast('Masukkan alamat (address) terlebih dahulu!', 'fa-triangle-exclamation', 'rose');
+    return;
+  }
+  
+  const qrContainer = document.getElementById('qr-result-container');
+  // Menampilkan state loading
+  qrContainer.innerHTML = '<div class="pulse-dot w-8 h-8 rounded-full bg-purple-500/50"></div>';
+  
+  // Memuat gambar dari API
+  const img = new Image();
+  img.onload = () => {
+    qrContainer.innerHTML = '';
+    img.className = 'w-full h-auto rounded-lg shadow-md';
+    qrContainer.appendChild(img);
+  };
+  img.onerror = () => {
+    qrContainer.innerHTML = '<span class="text-xs text-rose-400 text-center">Gagal memuat QR Code. Pastikan address valid.</span>';
+  };
+  // API baru untuk QR
+  img.src = `${API_BASE}/qr/${hash}`;
+}
+
+// ---------- FETCH TOP HOLDERS NUX ----------
+async function loadTopHolders() {
+  const tbody = document.getElementById('holders-tbody');
+  tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6"><div class="skel h-6 w-full"></div></td></tr>`;
+  try {
+    const res = await fetch(`${API_BASE}/ext/getrichlist`);
+    const data = await res.json();
+    const list = data.richlist || [];
+
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-slate-500">Data holder tidak ditemukan.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = list.map((item, index) => {
+      const rank = index + 1;
+      const address = item.a_id;
+      const claim = item.claim_name ? `<span class="ml-2 px-2 py-0.5 rounded text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">${item.claim_name}</span>` : '';
+      return `
+        <tr class="hover:bg-slate-100 dark:hover:bg-slate-900/40 transition border-none">
+          <td class="p-3 font-bold text-slate-400">${rank}</td>
+          <td class="p-3 font-semibold text-emerald-400 truncate max-w-[280px]">
+            <span class="cursor-pointer hover:underline" onclick="viewAddressDetail('${address}')">${address}</span>${claim}
+          </td>
+          <td class="p-3 text-right text-slate-800 dark:text-slate-200 font-bold">${formatSats(item.balance)} NUX</td>
+          <td class="p-3 text-right text-slate-500 font-medium">${formatSats(item.received)} NUX</td>
+        </tr>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error(err);
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-rose-400 text-xs">Gagal memuat data holder NUX.</td></tr>`;
+  }
+}
+
+// ---------- NETWORK PEERS ----------
+async function loadNetworkPeerConnections() {
+  const tbody = document.getElementById('peers-tbody');
+  const fallbackPeers = [
+    {"protocol":"70015","address":"118.137.66.113","port":"64295","country":"Indonesia","country_code":"ID","createdAt":"2026-07-24T15:10:09.703Z","version":"Nusa:0.25.99"},
+    {"port":"54661","address":"157.15.1.168","protocol":"70015","country":"Indonesia","country_code":"ID","createdAt":"2026-07-24T13:45:08.172Z","version":"Nusa:0.25.99"},
+    {"protocol":"70015","port":"28573","address":"163.245.206.142","country":"United States","country_code":"US","createdAt":"2026-07-24T15:25:11.120Z","version":"Nusa:0.25.99"},
+    {"address":"182.10.225.177","port":"14606","protocol":"70016","country":"Indonesia","country_code":"ID","createdAt":"2026-07-24T02:35:07.012Z","version":"Nusa:0.26.60"},
+    {"protocol":"70016","port":"28573","address":"202.10.38.22","country":"Indonesia","country_code":"ID","createdAt":"2026-07-24T15:25:11.159Z","version":"Nusa:0.26.30"},
+    {"port":"28573","address":"204.13.232.148","protocol":"70015","country":"United States","country_code":"US","createdAt":"2026-07-24T15:25:11.090Z","version":"Nusa:0.25.99"},
+    {"address":"80.80.109.43","protocol":"70016","port":"28573","country":"Russia","country_code":"RU","createdAt":"2026-07-24T15:25:11.136Z","version":"Nusa:0.26.30"}
+  ];
+
+  let peerList = [];
+  try {
+    const res = await fetch(`${API_BASE}/ext/getnetworkpeers`);
+    peerList = await res.json();
+    if (!peerList || !peerList.length) peerList = fallbackPeers;
+  } catch (err) {
+    peerList = fallbackPeers;
+  }
+
+  try {
+    tbody.innerHTML = peerList.map(p => {
+      const fullAddress = `${p.address}:${p.port}`;
+      const flag = getCountryFlag(p.country_code);
+      return `
+        <tr class="hover:bg-slate-800/35 transition border-none">
+          <td class="p-3 text-emerald-400 font-semibold">${fullAddress}</td>
+          <td class="p-3 text-slate-300">${p.protocol}</td>
+          <td class="p-3 text-cyan-400">${p.version}</td>
+          <td class="p-3 text-slate-200">${flag} ${p.country}</td>
+        </tr>
+      `;
+    }).join('');
+
+    setTimeout(() => {
+      if (!mapInitialized) {
+        nodeMap = L.map('map', { zoomControl: false }).setView([20, 0], 2);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; OpenStreetMap contributors & CARTO',
+          maxZoom: 19
+        }).addTo(nodeMap);
+        mapInitialized = true;
+      } else {
+        nodeMap.invalidateSize();
+      }
+
+      peerMarkers.forEach(m => nodeMap.removeLayer(m));
+      peerMarkers = [];
+
+      peerList.forEach(peer => {
+        const coords = countryCoords[peer.country_code] || { lat: 0, lng: 0 };
+        const flag = getCountryFlag(peer.country_code);
+        const fullAddress = `${peer.address}:${peer.port}`;
+
+        const marker = L.marker([coords.lat, coords.lng]).addTo(nodeMap);
+        marker.bindPopup(`
+          <div style="font-family:sans-serif; font-size:11px; color:#0f172a;">
+            <b>IP: ${fullAddress}</b><br>
+            Negara: ${flag} ${peer.country}<br>
+            Subversi: ${peer.version}<br>
+            Protokol: ${peer.protocol}
+          </div>
+        `);
+        peerMarkers.push(marker);
+      });
+    }, 300);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-rose-400 text-xs">Gagal merender data network peer.</td></tr>`;
+  }
+}
+
+// ---------- DASHBOARD STATS ----------
+async function fetchNetworkStats() {
+  try {
+    const [summaryRes, basicRes] = await Promise.all([
+      fetch(`${API_BASE}/ext/getsummary`),
+      fetch(`${API_BASE}/ext/getbasicstats`)
+    ]);
+    const summary = await summaryRes.json();
+    const basic = await basicRes.json();
+
+    setStat('stat-price', `$${(basic.last_price_usd ?? summary.lastUSDPrice ?? 0)}`);
+    setStat('stat-blocks', formatNumber(summary.blockcount));
+    setStat('stat-difficulty', Number(summary.difficulty).toFixed(4));
+    const hr = parseFloat(summary.hashrate || 0);
+    setStat('stat-hashrate', hr > 1e6 ? `${(hr/1e6).toFixed(2)} MH/s` : `${(hr/1e3).toFixed(2)} KH/s`);
+    setStat('stat-peers', summary.connections);
+    setStat('stat-supply', formatNumber(Math.round(summary.supply)));
+
+    if (lastKnownHeight !== null && summary.blockcount > lastKnownHeight) {
+      toast(`Blok baru ditemukan: 🔗${formatNumber(summary.blockcount)}`, 'fa-cube');
+    }
+    lastKnownHeight = summary.blockcount;
+
+    loadBlocks(summary.blockcount);
+    loadTransactions();
+  } catch (err) { console.error(err); }
+}
+
+function setStat(id, val) {
+  const el = document.getElementById(id);
+  if (el.innerText !== String(val)) {
+    el.innerText = val;
+    el.classList.remove('flash-update'); void el.offsetWidth; el.classList.add('flash-update');
+  }
+}
+
+async function loadBlocks(currentHeight) {
+  const tbody = document.getElementById('block-rows');
+  tbody.innerHTML = '';
+  for (let i = 0; i < 6; i++) {
+    const idx = currentHeight - i;
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-slate-100 dark:hover:bg-[#030712] transition cursor-pointer border-none';
+    tr.innerHTML = `
+      <td class="py-3 text-emerald-400 font-semibold">🔗${formatNumber(idx)}</td>
+      <td class="py-3 text-slate-700 dark:text-slate-300 max-w-[200px] truncate hash-col"><span class="skel inline-block w-32 h-3 align-middle"></span></td>
+      <td class="py-3 text-right text-slate-400 dark:text-slate-500 text-[11px] time-col">...</td>`;
+    tbody.appendChild(tr);
+
+    (async () => {
+      try {
+        const hashRes = await fetch(`${API_BASE}/api/getblockhash?index=${idx}`);
+        const hash = (await hashRes.text()).trim();
+        const blockRes = await fetch(`${API_BASE}/api/getblock?hash=${hash}`);
+        const block = await blockRes.json();
+        const hashCol = tr.querySelector('.hash-col');
+        const timeCol = tr.querySelector('.time-col');
+        hashCol.innerHTML = `<span class="hover:underline">${truncHash(hash, 14, 8)}</span>`;
+        timeCol.innerText = timeAgo(block.time);
+        tr.addEventListener('click', () => viewBlockDetail(hash));
+      } catch (e) { }
+    })();
+  }
+}
+
+async function loadTransactions() {
+  try {
+    const res = await fetch(`${API_BASE}/ext/getlasttxs/0/0/6`);
+    const data = await res.json();
+    const tbody = document.getElementById('tx-rows');
+    tbody.innerHTML = '';
+    (data || []).forEach(tx => {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-100 dark:hover:bg-[#030712] transition border-none';
+      tr.innerHTML = `
+        <td class="py-3 text-cyan-400 font-semibold max-w-[150px] truncate">
+          <span class="hover:underline cursor-pointer" onclick="viewTxDetail('${tx.txid}')">${truncHash(tx.txid,10,8)}</span>
+        </td>
+        <td class="py-3 text-slate-800 dark:text-slate-300 font-medium">${formatNumber(tx.amount)} NUX</td>
+        <td class="py-3 text-right">
+          <button onclick="viewTxDetail('${tx.txid}')" class="bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 p-1 px-2.5 rounded-lg transition text-[11px]">
+            <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+  } catch (err) { console.error(err); }
+}
+
+async function loadDistribution() {
+  try {
+    const res = await fetch(`${API_BASE}/ext/getdistribution`);
+    const d = await res.json();
+    const buckets = [
+      { key:'t_1_25', label:'Top 1–25', color:'#10b981' },
+      { key:'t_26_50', label:'Top 26–50', color:'#06b6d4' },
+      { key:'t_51_75', label:'Top 51–75', color:'#a855f7' },
+      { key:'t_76_100', label:'Top 76–100', color:'#f59e0b' },
+      { key:'t_101plus', label:'Lainnya (101+)', color:'#64748b' },
+    ];
+    let acc = 0;
+    const stops = buckets.map(b => {
+      const pct = parseFloat(d[b.key]?.percent || 0);
+      const start = acc; acc += pct;
+      return `${b.color} ${start}% ${acc}%`;
+    }).join(', ');
+    document.getElementById('dist-donut').outerHTML = `<div id="dist-donut" class="w-40 h-40 rounded-full" style="background: conic-gradient(${stops}); box-shadow: inset 0 0 0 14px var(--card-bg);"></div>`;
+    document.getElementById('dist-legend').innerHTML = buckets.map(b => `
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${b.color}"></span>${b.label}</span>
+        <span class="text-slate-800 dark:text-slate-200 font-semibold">${d[b.key]?.percent || 0}%</span>
+      </div>`).join('');
+  } catch (err) { console.error(err); }
+}
+
+// ---------- BLOCK DETAIL ----------
+async function viewBlockDetail(hash) {
+  try {
+    showPage('page-block');
+    location.hash = `/block/${hash}`;
+    document.getElementById('block-title').innerText = 'Memuat blok...';
+    document.getElementById('block-table-body').innerHTML = `<tr><td class="py-6"><div class="skel h-4 w-full"></div></td></tr>`;
+    document.getElementById('block-tx-list').innerHTML = '';
+
+    const res = await fetch(`${API_BASE}/api/getblock?hash=${hash}`);
+    const data = await res.json();
+    if (!data || !data.hash) { toast('Blok tidak ditemukan.', 'fa-triangle-exclamation', 'rose'); return; }
+    currentBlock = data;
+
+    document.getElementById('block-title').innerText = `Block 🔗${formatNumber(data.height)}`;
+    document.getElementById('block-hash-sub').innerText = data.hash;
+
+    const isGenesis = data.height === 0 || !data.previousblockhash;
+    const rows = {
+      'Tinggi Blok': formatNumber(data.height),
+      'Hash': data.hash,
+      'Konfirmasi': formatNumber(data.confirmations),
+      'Ukuran (bytes)': formatNumber(data.size),
+      'Versi': data.version,
+      'Merkle Root': data.merkleroot,
+      'Waktu': data.time ? new Date(data.time*1000).toUTCString() : '-',
+      'Nonce': data.nonce,
+      'Bits': data.bits,
+      'Difficulty': data.difficulty,
+      'Jumlah Transaksi': (data.tx || []).length,
+      'Hash Blok Sebelumnya': data.previousblockhash || '(Akar Rantai)',
+      'Hash Blok Berikutnya': data.nextblockhash || '(Blok Terbaru)'
+    };
+    const tbody = document.getElementById('block-table-body');
+    tbody.innerHTML = '';
+    for (const [k,v] of Object.entries(rows)) {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-100 dark:hover:bg-slate-900/40 transition border-none';
+      tr.innerHTML = `<td class="py-3 font-semibold text-slate-500 w-1/3 uppercase tracking-wider text-[11px] align-top">${k}</td>
+        <td class="py-3 text-slate-900 dark:text-slate-200 break-all select-all font-medium">${v}</td>`;
+      tbody.appendChild(tr);
+    }
+
+    const txWrap = document.getElementById('block-tx-list');
+    if (data.tx && data.tx.length) {
+      txWrap.innerHTML = data.tx.map(txid => `
+        <div class="flex items-center justify-between bg-slate-100 dark:bg-[#030712] rounded-xl px-3 py-2.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-900 transition border border-slate-200 dark:border-slate-800/80" onclick="viewTxDetail('${txid}')">
+          <span class="text-emerald-400">${truncHash(txid, 16, 10)}</span>
+          <i class="fa-solid fa-arrow-right text-slate-500 text-[10px]"></i>
+        </div>`).join('');
+    } else {
+      txWrap.innerHTML = `<p class="text-slate-500 text-center py-2">Tidak ada transaksi.</p>`;
+    }
+
+    document.getElementById('btn-prev-block').disabled = isGenesis;
+    document.getElementById('btn-prev-block').classList.toggle('opacity-40', isGenesis);
+    const noNext = !data.nextblockhash;
+    document.getElementById('btn-next-block').disabled = noNext;
+    document.getElementById('btn-next-block').classList.toggle('opacity-40', noNext);
+  } catch (err) { toast('Gagal memuat detail blok.', 'fa-triangle-exclamation', 'rose'); }
+}
+
+function goPrevBlock() { if (currentBlock && currentBlock.previousblockhash) viewBlockDetail(currentBlock.previousblockhash); }
+function goNextBlock() { if (currentBlock && currentBlock.nextblockhash) viewBlockDetail(currentBlock.nextblockhash); }
+
+// ---------- ADDRESS DETAIL ----------
+async function viewAddressDetail(address) {
+  if (!address || address === 'coinbase') return;
+  try {
+    showPage('page-address');
+    location.hash = `/address/${address}`;
+    document.getElementById('address-hash').innerText = address;
+    const res = await fetch(`${API_BASE}/ext/getaddress/${address}`);
+    const data = await res.json();
+    if (data.error) { toast('Address tidak ditemukan.', 'fa-triangle-exclamation', 'rose'); return; }
+
+    document.getElementById('address-balance').innerText = `${formatNumber(parseFloat(data.balance || 0))} NUX`;
+    document.getElementById('address-received').innerText = `${formatNumber(data.received || 0)} NUX`;
+    document.getElementById('address-sent').innerText = `${formatNumber(data.sent || 0)} NUX`;
+
+    const listWrap = document.getElementById('address-tx-list');
+    const txs = data.last_txs || [];
+    if (txs.length) {
+      listWrap.innerHTML = txs.slice(0, 40).map(t => `
+        <div class="flex items-center justify-between bg-slate-100 dark:bg-[#030712] rounded-xl px-3 py-2.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-900 transition border border-slate-200 dark:border-slate-800/80" onclick="viewTxDetail('${t.addresses}')">
+          <span class="text-emerald-400">${truncHash(t.addresses, 16, 10)}</span>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${t.type === 'vin' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'}">${t.type === 'vin' ? 'KELUAR' : 'MASUK'}</span>
+        </div>`).join('');
+    } else {
+      listWrap.innerHTML = `<p class="text-slate-500 text-center py-2">Belum ada transaksi.</p>`;
+    }
+  } catch (err) { toast('Gagal memuat address.', 'fa-triangle-exclamation', 'rose'); }
+}
+
+// ---------- TX DETAIL ----------
+async function viewTxDetail(txid) {
+  try {
+    showPage('page-tx');
+    location.hash = `/tx/${txid}`;
+    const res = await fetch(`${API_BASE}/ext/gettx/${txid}`);
+    const payload = await res.json();
+    const data = payload.tx;
+    if (!data) { toast('Transaksi tidak ditemukan.', 'fa-triangle-exclamation', 'rose'); return; }
+
+    document.getElementById('tx-block-info').innerText = `Data transaksi dari blok NusaChain 🔗${formatNumber(data.blockindex)}`;
+    document.getElementById('tx-hash-val').innerText = data.txid;
+
+    const blockHashEl = document.getElementById('tx-blockhash-val');
+    blockHashEl.innerText = data.blockhash || '-';
+    blockHashEl.onclick = () => data.blockhash && viewBlockDetail(data.blockhash);
+
+    document.getElementById('tx-total-val').innerText = `${formatSats(data.total)} NUX`;
+
+    const confBox = document.getElementById('tx-confirmations-val');
+    confBox.innerText = formatNumber(payload.confirmations || 0);
+    confBox.className = payload.confirmations > 0
+      ? "bg-emerald-600 text-white font-bold text-center py-1 rounded-lg"
+      : "bg-rose-500/80 text-white font-bold text-center py-1 rounded-lg";
+
+    document.getElementById('tx-time-val').innerText = data.timestamp ? new Date(data.timestamp * 1000).toUTCString() : '-';
+
+    const inputsTbody = document.getElementById('tx-inputs-list');
+    const recipientsTbody = document.getElementById('tx-recipients-list');
+
+    inputsTbody.innerHTML = (data.vin || []).map(vin => {
+      if (vin.addresses === 'coinbase') {
+        return `<tr class="bg-[#ef4444]/10 border-none"><td class="p-3 text-rose-300 italic">Reward Blok Baru (Coinbase)</td>
+          <td class="p-3 text-right text-rose-300 font-bold">${formatSats(vin.amount)}</td></tr>`;
+      }
+      return `<tr class="bg-[#ef4444]/10 hover:bg-[#ef4444]/20 transition border-none">
+        <td class="p-3 text-emerald-400 truncate max-w-[220px]"><span class="cursor-pointer hover:underline" onclick="viewAddressDetail('${vin.addresses}')">${vin.addresses}</span></td>
+        <td class="p-3 text-right text-rose-300 font-bold">${formatSats(vin.amount)}</td></tr>`;
+    }).join('') || `<tr class="border-none"><td colspan="2" class="p-3 text-center text-slate-500">Tidak ada data input.</td></tr>`;
+
+    recipientsTbody.innerHTML = (data.vout || []).map(vout => `
+      <tr class="bg-[#10b981]/10 hover:bg-[#10b981]/20 transition border-none">
+        <td class="p-3 text-emerald-400 truncate max-w-[220px]"><span class="cursor-pointer hover:underline" onclick="viewAddressDetail('${vout.addresses}')">${vout.addresses}</span></td>
+        <td class="p-3 text-right text-emerald-300 font-bold">${formatSats(vout.amount)}</td></tr>`).join('') || `<tr class="border-none"><td colspan="2" class="p-3 text-center text-slate-500">Tidak ada data output.</td></tr>`;
+  } catch (err) { toast('Gagal memuat transaksi.', 'fa-triangle-exclamation', 'rose'); }
+}
+
+function extractQueryFromInput(input) {
+  let cleaned = input.trim();
+  if (cleaned.startsWith('http://') || cleaned.startsWith('https://')) {
+    try {
+      const urlObj = new URL(cleaned);
+      const parts = urlObj.pathname.split('/').filter(p => p.length > 0);
+      if (parts.length > 0) cleaned = parts[parts.length - 1];
+    } catch (e) {}
+  }
+  return cleaned;
+}
+
+async function performSearch(rawInput) {
+  const value = extractQueryFromInput(rawInput);
+  if (!value) return;
+  if (/^\d+$/.test(value)) {
+    try {
+      const res = await fetch(`${API_BASE}/api/getblockhash?index=${value}`);
+      const hash = (await res.text()).trim();
+      if (hash && hash.length === 64) return viewBlockDetail(hash);
+    } catch (e) {}
+    return toast('Tinggi blok tidak ditemukan.', 'fa-triangle-exclamation', 'rose');
+  }
+  if (/^[a-fA-F0-9]{64}$/.test(value)) {
+    try {
+      const res = await fetch(`${API_BASE}/api/getblock?hash=${value}`);
+      const data = await res.json();
+      if (data && data.hash) return viewBlockDetail(value);
+    } catch (e) {}
+    return viewTxDetail(value);
+  }
+  if (value.toLowerCase().startsWith('nu1') || (value.length >= 26 && value.length <= 45)) {
+    return viewAddressDetail(value);
+  }
+  toast('Format pencarian tidak dikenali.', 'fa-triangle-exclamation', 'rose');
+}
+
+document.getElementById('globalSearch').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') performSearch(this.value);
+});
+
+function handleRoute() {
+  const hash = window.location.hash;
+  if (!hash || hash === '#') { showDashboard(false); return; }
+  const parts = hash.replace(/^#\/?/, '').split('/');
+  const type = parts[0];
+  const query = parts[1];
+
+  if (type === 'tx' && query) viewTxDetail(query);
+  else if (type === 'block' && query) viewBlockDetail(query);
+  else if (type === 'address' && query) viewAddressDetail(query);
+  else if (type === 'holders') showHoldersPage();
+  else if (type === 'qrcode') showQRCodePage();
+  else if (type === 'pool') showPoolPage();
+  else showDashboard(false);
+}
+
+window.addEventListener('hashchange', handleRoute);
+
+fetchNetworkStats();
+loadDistribution();
+setInterval(fetchNetworkStats, 20000);
+handleRoute();
+</script>
+</body>
+</html>
